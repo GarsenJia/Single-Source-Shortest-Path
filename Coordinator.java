@@ -19,7 +19,7 @@ class Coordinator {
     // set to false temporarily when threads are supposed to die.
     private boolean running = true;
     // set to false when threads are supposed to pause.
-    private int numThreads = 0;
+    public int numThreads = 0;
     // number of active worker threads.  Maintained by register and
     // unregister methods.
 

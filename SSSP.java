@@ -166,7 +166,7 @@ public class SSSP {
     //
     private Surface build(RootPaneContainer pane, int an) {
         final Coordinator c = new Coordinator();
-        Surface s = new Surface(n, sd, geom, degree, c);
+        Surface s = new Surface(n, sd, geom, degree, c, numThreads);
         Animation at = null;
         if (an == SHOW_RESULT || an == FULL_ANIMATION) {
             at = new Animation(s);
@@ -202,7 +202,7 @@ public class SSSP {
 
     public static void main(String[] args) {
         parseArgs(args);
-        SSSP_Liu me = new SSSP_Liu();
+        SSSP me = new SSSP();
         JFrame f = null;
         if (animate == SHOW_RESULT || animate == FULL_ANIMATION) {
             f = new JFrame("SSSP");
@@ -226,9 +226,17 @@ public class SSSP {
                 if (numThreads == 0) {
                     s.DijkstraSolve();
                 } else {
-                    s.DeltaSolve();
+                    s.deltaSolveMain();
                 }
             } catch (Coordinator.KilledException e) {
+                System.out.println("Killed");
+                System.out.println(e.toString());
+            } catch (BrokenBarrierException e) {
+                System.out.println("BrokenBarrierException");
+                System.out.println(e.toString());
+            } catch (InterruptedException e) {
+                System.out.println("InterruptedException");
+                System.out.println(e.toString());
             }
             long endTime = new Date().getTime();
             System.out.printf("elapsed time: %.3f seconds\n",
@@ -267,10 +275,12 @@ class Worker extends Thread {
             if (dijkstra) {
                 s.DijkstraSolve();
             } else {
-                s.DeltaSolve();
+                s.deltaSolveMain();
             }
             c.unregister();
         } catch (Coordinator.KilledException e) {
+        } catch (BrokenBarrierException e) {
+        } catch (InterruptedException e) {
         }
         if (a != null) {
             // Tell the graphics event thread to unset the default
@@ -299,7 +309,7 @@ class Worker extends Thread {
 // The Surface is the SSSP world, containing all the vertices.
 // Vertex 0 is the source.
 //
-public class Surface {
+class Surface {
     // all X and Y coordinates will be in the range [0..2^28)
     public static final int minCoord = 0;
     public static final int maxCoord = 1024 * 1024 * 256;
@@ -631,34 +641,34 @@ public class Surface {
 
     // A Request is a potential relaxation.
     //
-    class Request {
-        private Vertex v;
-        private Edge e;
-
-        // To relax a request is to consider whether e might provide
-        // v with a better path back to the source.
-        //
-        public void relax() throws Coordinator.KilledException {
-            Vertex o = e.other(v);
-            long altDist = o.distToSource + e.weight;
-            if (altDist < v.distToSource) {
-                // Yup; better path home.
-                buckets.get((int) ((v.distToSource / delta) % numBuckets)).remove(v);
-                v.distToSource = altDist;
-                if (v.predecessor != null) {
-                    v.predecessor.unselect();
-                }
-                v.predecessor = e;
-                e.select();
-                buckets.get((int) ((altDist / delta) % numBuckets)).add(v);
-            }
-        }
-
-        public Request(Vertex V, Edge E) {
-            v = V;
-            e = E;
-        }
-    }
+//    class Request {
+//        private Vertex v;
+//        private Edge e;
+//
+//        // To relax a request is to consider whether e might provide
+//        // v with a better path back to the source.
+//        //
+//        public void relax() throws Coordinator.KilledException {
+//            Vertex o = e.other(v);
+//            long altDist = o.distToSource + e.weight;
+//            if (altDist < v.distToSource) {
+//                // Yup; better path home.
+//                buckets.get((int) ((v.distToSource / delta) % numBuckets)).remove(v);
+//                v.distToSource = altDist;
+//                if (v.predecessor != null) {
+//                    v.predecessor.unselect();
+//                }
+//                v.predecessor = e;
+//                e.select();
+//                buckets.get((int) ((altDist / delta) % numBuckets)).add(v);
+//            }
+//        }
+//
+//        public Request(Vertex V, Edge E) {
+//            v = V;
+//            e = E;
+//        }
+//    }
 
     public class Message {
         public Edge e; //which edge
@@ -699,6 +709,7 @@ public class Surface {
                     }
                 }
             }
+            System.out.println("No more buckets");
             nextBucket = -1;
             return;
         }
@@ -716,17 +727,21 @@ public class Surface {
     }
 
     public void deltaSolveMain() throws BrokenBarrierException, InterruptedException {
+        System.out.println("Delta solve main");
+        System.out.println("labeling vertices");
         for (int i = 0; i < n; i++) {
             vertices[i].id = i;
         }
         numBuckets = 2 * degree;
         delta = maxCoord / degree;
         buckets = new ArrayList<ArrayList<LinkedHashSet<Vertex>>>(numBuckets);
-        for (int i = 0; i < numBuckets; ++i) {
+        for (int i = 0; i < numBuckets; i++) {
+            buckets.add(new ArrayList<LinkedHashSet<Vertex>>(numThreads));
             for (int j = 0; j < numThreads; j++) {
-                buckets.add(new ArrayList<LinkedHashSet<Vertex>>());
+                buckets.get(i).add(new LinkedHashSet<Vertex>());
             }
         }
+        System.out.println("Adding source to buckets");
         buckets.get(0).get(0).add(vertices[0]);
         ArrayList<ConcurrentLinkedQueue<Message>> messageQueues =
                 new ArrayList<ConcurrentLinkedQueue<Message>>(numThreads);
@@ -742,31 +757,46 @@ public class Surface {
         Share.numThreads = numThreads;
         CyclicBarrier barrier = new CyclicBarrier(numThreads + 1);
         DeltaWorker[] threads = new DeltaWorker[numThreads];
+        System.out.println("Starting threads");
         for (int i = 0; i < numThreads; i++) {
-            threads[i] = new DeltaWorker(i, share, barrier);
+            threads[i] = new DeltaWorker(i, share, barrier, coord);
             threads[i].start();
         }
+        System.out.println("outer while true");
         while (true) {
             try {
+                System.out.println("release threads from initial barrier");
                 barrier.await();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } catch (BrokenBarrierException e) {
                 e.printStackTrace();
             }
+            System.out.println("Get next bucket");
             share.getNext();
             if (share.nextBucket == -1) {
+                System.out.println("no more buckets");
+                System.out.println("wait for threads to finish");
+                barrier.await();
+                System.out.println("break from outer while true");
+                for (DeltaWorker thread : threads) {
+                    thread.join();
+                }
                 break;
             }
             try {
+                System.out.println("wait for threads to collect modifictions");
                 barrier.await();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } catch (BrokenBarrierException e) {
                 e.printStackTrace();
             }
+            System.out.println("inner while true");
             while (true) {
+                System.out.println("barrier in inner while true");
                 barrier.await();
+                System.out.println("for each thread");
                 for (DeltaWorker thread : threads) {
                     share.buckets.get(share.nextBucket).get(thread.id).removeAll(thread.remove);
                     for (Vertex v : thread.remove) {
@@ -782,12 +812,16 @@ public class Surface {
                         share.messages.get(threadDest).add(s);
                     }
                 }
+                System.out.println("check if bucket is empty");
                 share.checkCurrBucketEmpty();
                 if (share.bucketEmpty) {
+                    System.out.println("bucket is empty");
                     break;
                 }
+                System.out.println("wait for threads to working on bucket");
                 barrier.await();
             }
+            System.out.println("wait for heavy relax to finish");
             barrier.await();
         }
 
@@ -797,33 +831,40 @@ public class Surface {
     private class DeltaWorker extends Thread {
         private int id;
         private final Coordinator coord;
-        ArrayList<Message> addme;
-        ArrayList<Vertex> remove;
-        ArrayList<Message> messageQ;
+        ArrayList<Message> addme = new ArrayList<Message>();
+        ArrayList<Vertex> remove = new ArrayList<Vertex>();
+        ArrayList<Message> messageQ = new ArrayList<Message>();
         Share share;
         CyclicBarrier barrier;
-        ArrayList<Edge> light;
-        ArrayList<Edge> heavy;
+        ArrayList<Edge> light = new ArrayList<Edge>();
+        ArrayList<Edge> heavy = new ArrayList<Edge>();
 
-        public DeltaWorker(int id, Share share, CyclicBarrier barrier) {
+        public DeltaWorker(int id, Share share, CyclicBarrier barrier, Coordinator coord) {
             this.id = id;
             this.share = share;
             this.barrier = barrier;
+            this.coord = coord;
         }
 
 
         public void run() {
             try {
+                System.out.println("Thread " + id + " registered");
                 coord.register();
+                System.out.println("Thread " + id + "outer while true");
                 while (true) {
+                    System.out.println("Thread " + id + "released from initial barrier");
                     barrier.await(); //await 1
                     System.out.println("Thread " + id + " is running");
                     if (share.nextBucket == -1) {
+                        System.out.println("Thread " + id + " is unregistering");
                         coord.unregister();
                         System.out.println("Thread " + id + " is done");
+                        return;
                     }
                     for (Vertex v : share.buckets.get(share.nextBucket).get(id)) {//buck is the first non empty bucket
                         //Calculate vertices and separate them into light and heavy
+                        System.out.println("Thread " + id + " is calculating light and heavy");
                         for (Edge e : v.neighbors) {
                             if (e.weight <= delta) {
                                 light.add(e);
@@ -832,7 +873,7 @@ public class Surface {
                             }
                         }
 
-
+                        System.out.println("Thread " + id + " relaxing light");
                         //Relax light edges
                         int assign = -1; //to assign vertices to threads
                         for (Edge e : light) {
@@ -851,19 +892,24 @@ public class Surface {
 
                             remove.add(v);
 
+                            System.out.println("Thread " + id + " awaiting main thread for modification");
                             barrier.await(); //await 2
                             //ready for main thread to take info
-
+                            System.out.println("Thread " + id + " is idk");
+                            barrier.await(); //debug await
                             barrier.await(); //await 3
                             //main thread await4 can also release this await
 
-                            if (!share.buckemptflag) {//if bucket not empty, continue, from the for loop
+                            if (!share.bucketEmpty) {//if bucket not empty, continue, from the for loop
+                                System.out.println("Thread " + id + " will be working on the same bucket");
                                 continue;           //still in the for loop of the v in partition
                             } else {//if bucket is empty, break out of for loop
+                                System.out.println("Thread " + id + " will be working on a new bucket");
                                 break; //still in the while true loop
                             }
                         }//current bucket empty, deal with heavy edges
                         //relax heavy edges
+                        System.out.println("Thread " + id + " is relaxing heavy");
                         for (Edge e : heavy) {
                             Vertex o = e.other(v); //neighbor vertex
                             long altDist = v.distToSource + e.weight;
@@ -880,6 +926,7 @@ public class Surface {
 
                         }
                         //no need to add to remove, already did in the light part
+                        System.out.println("Thread " + id + " is awaiting main thread for modification");
                         barrier.await(); //await 4
                         //wait for main thread to take heavy info
                         //no need to check buckemptflag, heavy won't be added back
@@ -887,8 +934,6 @@ public class Surface {
                         //when go back to the top of while true loop, will be blocked by the await 1
                     }
                 }
-            } catch (Coordinator.KilledException e) {
-                System.out.println("Killed");
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } catch (BrokenBarrierException e) {
@@ -897,22 +942,22 @@ public class Surface {
         }
     }
 
-        public Surface(int N, long SD, double G, int D, Coordinator C, int numThreads) {
-            n = N;
-            sd = SD;
-            geom = G;
-            degree = D;
-            coord = C;
-            this.numThreads = numThreads;
+    public Surface(int N, long SD, double G, int D, Coordinator C, int numThreads) {
+        n = N;
+        sd = SD;
+        geom = G;
+        degree = D;
+        coord = C;
+        this.numThreads = numThreads;
 
-            vertices = new Vertex[n];
-            vertexHash = new HashSet<Vertex>(n);
-            edges = new Vector<Edge>();
+        vertices = new Vertex[n];
+        vertexHash = new HashSet<Vertex>(n);
+        edges = new Vector<Edge>();
 
-            prn = new Random();
-            reset();
-        }
-
+        prn = new Random();
+        reset();
+    }
+}
 
         // Class Animation is the one really complicated sub-pane of the user interface.
 //
@@ -1144,4 +1189,4 @@ public class Surface {
                 root.setDefaultButton(runButton);
             }
         }
-    }
+
