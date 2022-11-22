@@ -18,10 +18,12 @@
 
 import java.awt.*;
 import java.awt.event.*;
-import java.io.*;
 import javax.swing.*;
 import java.util.*;
 import java.lang.*;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CyclicBarrier;
 
 public class SSSP {
     private static int n = 50;              // default number of vertices
@@ -200,7 +202,7 @@ public class SSSP {
 
     public static void main(String[] args) {
         parseArgs(args);
-        SSSP me = new SSSP();
+        SSSP_Liu me = new SSSP_Liu();
         JFrame f = null;
         if (animate == SHOW_RESULT || animate == FULL_ANIMATION) {
             f = new JFrame("SSSP");
@@ -297,7 +299,7 @@ class Worker extends Thread {
 // The Surface is the SSSP world, containing all the vertices.
 // Vertex 0 is the source.
 //
-class Surface {
+public class Surface {
     // all X and Y coordinates will be in the range [0..2^28)
     public static final int minCoord = 0;
     public static final int maxCoord = 1024 * 1024 * 256;
@@ -317,6 +319,7 @@ class Surface {
     private double geom;        // degree of geometric realism
     private int degree;         // desired average node degree
     private final Random prn;   // pseudo-random number generator
+    private final int numThreads;
 
     private class Vertex {
         public final int xCoord;
@@ -326,6 +329,8 @@ class Surface {
 
         public long distToSource;
         public Edge predecessor;
+
+        public int id;
 
         // Add a new neighbor to this vertex (called only during initialization)
         public void addNeighbor(Edge e) {
@@ -620,7 +625,7 @@ class Surface {
 
     int numBuckets;
     int delta;
-    private ArrayList<LinkedHashSet<Vertex>> buckets;
+    private ArrayList<ArrayList<LinkedHashSet<Vertex>>> buckets;
     // This is an ArrayList instead of a plain array to avoid the generic
     // array creation error message that stems from Java erasure.
 
@@ -655,313 +660,488 @@ class Surface {
         }
     }
 
-    // Return list of requests whose connecting edge weight is <= or > than delta.
-    //
-    LinkedList<Request> findRequests(Collection<Vertex> bucket, boolean light) {
-        LinkedList<Request> rtn = new LinkedList<Request>();
-        for (Vertex v : bucket) {
-            for (Edge e : v.neighbors) {
-                if ((light && e.weight <= delta) || (!light && e.weight > delta)) {
-                    Vertex o = e.other(v);
-                    rtn.add(new Request(o, e));
-                }
-            }
+    public class Message {
+        public Edge e; //which edge
+        public Vertex v; //which predecessor
+        public long distToSource; //distance
+
+        public Message(Edge e, Vertex v, long distToSource) {
+            this.e = e;
+            this.v = v;
+            this.distToSource = distToSource;
         }
-        return rtn;
     }
 
-    // Main solver routine.
-    //
-    public void DeltaSolve() throws Coordinator.KilledException {
+    public class Share {
+        public ArrayList<ArrayList<LinkedHashSet<Vertex>>> buckets;
+        public ArrayList<ConcurrentLinkedQueue<Message>> messages;
+        public ArrayList<Long> tentativeDistances;
+        public int nextBucket = 0;
+
+        public static int numThreads;
+        public boolean bucketEmpty = false;
+
+        public Share(ArrayList<ArrayList<LinkedHashSet<Vertex>>> buckets,
+                     ArrayList<ConcurrentLinkedQueue<Message>> messages,
+                     ArrayList<Long> tentativeDistances, int nextBucket) {
+            this.buckets = buckets;
+            this.messages = messages;
+            this.tentativeDistances = tentativeDistances;
+            this.nextBucket = nextBucket;
+        }
+
+        public void getNext() {
+            for (int i = 0; i < numBuckets; i++) {
+                for (LinkedHashSet<Vertex> bucket : buckets.get(i)) {
+                    if (bucket.size() > 0) {
+                        nextBucket = i;
+                        return;
+                    }
+                }
+            }
+            nextBucket = -1;
+            return;
+        }
+
+        public void checkCurrBucketEmpty() {
+            for (LinkedHashSet<Vertex> partition : buckets.get(nextBucket)) {
+                if (partition.size() > 0) {
+                    bucketEmpty = false;
+                    return;
+                }
+            }
+            bucketEmpty = true;
+            return;
+        }
+    }
+
+    public void deltaSolveMain() throws BrokenBarrierException, InterruptedException {
+        for (int i = 0; i < n; i++) {
+            vertices[i].id = i;
+        }
         numBuckets = 2 * degree;
         delta = maxCoord / degree;
-        // All buckets, together, cover a range of 2 * maxCoord,
-        // which is larger than the weight of any edge, so a relaxation
-        // will never wrap all the way around the array.
-        buckets = new ArrayList<LinkedHashSet<Vertex>>(numBuckets);
+        buckets = new ArrayList<ArrayList<LinkedHashSet<Vertex>>>(numBuckets);
         for (int i = 0; i < numBuckets; ++i) {
-            buckets.add(new LinkedHashSet<Vertex>());
+            for (int j = 0; j < numThreads; j++) {
+                buckets.add(new ArrayList<LinkedHashSet<Vertex>>());
+            }
         }
-        buckets.get(0).add(vertices[0]);
-        int i = 0;
-        for (; ; ) {
-            LinkedList<Vertex> removed = new LinkedList<Vertex>();
-            LinkedList<Request> requests;
-            while (buckets.get(i).size() > 0) {
-                requests = findRequests(buckets.get(i), true);  // light relaxations
-                // Move all vertices from bucket i to removed list.
-                removed.addAll(buckets.get(i));
-                buckets.set(i, new LinkedHashSet<Vertex>());
-                for (Request req : requests) {
-                    req.relax();
+        buckets.get(0).get(0).add(vertices[0]);
+        ArrayList<ConcurrentLinkedQueue<Message>> messageQueues =
+                new ArrayList<ConcurrentLinkedQueue<Message>>(numThreads);
+        for (int i = 0; i < numThreads; i++) {
+            messageQueues.add(new ConcurrentLinkedQueue<Message>());
+        }
+        ArrayList<Long> tentativeDistances = new ArrayList<Long>(n);
+        for (int i = 0; i < n; i++) {
+            tentativeDistances.add(Long.MAX_VALUE);
+        }
+        tentativeDistances.set(0, 0l);
+        Share share = new Share(buckets, messageQueues, tentativeDistances, 0);
+        Share.numThreads = numThreads;
+        CyclicBarrier barrier = new CyclicBarrier(numThreads + 1);
+        DeltaWorker[] threads = new DeltaWorker[numThreads];
+        for (int i = 0; i < numThreads; i++) {
+            threads[i] = new DeltaWorker(i, share, barrier);
+            threads[i].start();
+        }
+        while (true) {
+            try {
+                barrier.await();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (BrokenBarrierException e) {
+                e.printStackTrace();
+            }
+            share.getNext();
+            if (share.nextBucket == -1) {
+                break;
+            }
+            try {
+                barrier.await();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (BrokenBarrierException e) {
+                e.printStackTrace();
+            }
+            while (true) {
+                barrier.await();
+                for (DeltaWorker thread : threads) {
+                    share.buckets.get(share.nextBucket).get(thread.id).removeAll(thread.remove);
+                    for (Vertex v : thread.remove) {
+                        share.tentativeDistances.set(v.id, v.distToSource);
+                    }
+                    for (Message s : thread.addme) {
+                        int bucketDest = (int) (s.distToSource / delta);
+                        share.buckets.get(bucketDest).get(thread.id).add(s.e.other(s.v));
+                    }
+                    for (Message s : thread.messageQ) {
+                        int bucketDest = (int) (s.distToSource / delta);
+                        int threadDest = s.e.other(s.v).id % numThreads;
+                        share.messages.get(threadDest).add(s);
+                    }
                 }
+                share.checkCurrBucketEmpty();
+                if (share.bucketEmpty) {
+                    break;
+                }
+                barrier.await();
             }
-            // Now bucket i is empty.
-            requests = findRequests(removed, false);    // heavy relaxations
-            for (Request req : requests) {
-                req.relax();
+            barrier.await();
+        }
+
+
+    }
+
+    private class DeltaWorker extends Thread {
+        private int id;
+        private final Coordinator coord;
+        ArrayList<Message> addme;
+        ArrayList<Vertex> remove;
+        ArrayList<Message> messageQ;
+        Share share;
+        CyclicBarrier barrier;
+        ArrayList<Edge> light;
+        ArrayList<Edge> heavy;
+
+        public DeltaWorker(int id, Share share, CyclicBarrier barrier) {
+            this.id = id;
+            this.share = share;
+            this.barrier = barrier;
+        }
+
+
+        public void run() {
+            try {
+                coord.register();
+                while (true) {
+                    barrier.await(); //await 1
+                    System.out.println("Thread " + id + " is running");
+                    if (share.nextBucket == -1) {
+                        coord.unregister();
+                        System.out.println("Thread " + id + " is done");
+                    }
+                    for (Vertex v : share.buckets.get(share.nextBucket).get(id)) {//buck is the first non empty bucket
+                        //Calculate vertices and separate them into light and heavy
+                        for (Edge e : v.neighbors) {
+                            if (e.weight <= delta) {
+                                light.add(e);
+                            } else {
+                                heavy.add(e);
+                            }
+                        }
+
+
+                        //Relax light edges
+                        int assign = -1; //to assign vertices to threads
+                        for (Edge e : light) {
+                            Vertex o = e.other(v); //neighbor vertex
+                            long altDist = v.distToSource + e.weight;
+                            if (altDist < o.distToSource) {//possible relaxation
+                                assign = o.id % share.numThreads;
+                                if (assign == id) {//belongs to this thread
+                                    Message m = new Message(e, o, altDist);
+                                    addme.add(m);
+                                } else {//belongs to another thread
+                                    Message n = new Message(e, o, altDist);
+                                    messageQ.add(n);
+                                }
+                            }
+
+                            remove.add(v);
+
+                            barrier.await(); //await 2
+                            //ready for main thread to take info
+
+                            barrier.await(); //await 3
+                            //main thread await4 can also release this await
+
+                            if (!share.buckemptflag) {//if bucket not empty, continue, from the for loop
+                                continue;           //still in the for loop of the v in partition
+                            } else {//if bucket is empty, break out of for loop
+                                break; //still in the while true loop
+                            }
+                        }//current bucket empty, deal with heavy edges
+                        //relax heavy edges
+                        for (Edge e : heavy) {
+                            Vertex o = e.other(v); //neighbor vertex
+                            long altDist = v.distToSource + e.weight;
+                            if (altDist < o.distToSource) {//possible relaxation
+                                assign = o.id % share.numThreads;
+                                if (assign == id) {//belongs to this thread
+                                    Message m = new Message(e, o, altDist);
+                                    addme.add(m);
+                                } else {//belongs to another thread
+                                    Message n = new Message(e, o, altDist);
+                                    messageQ.add(n);
+                                }
+                            }
+
+                        }
+                        //no need to add to remove, already did in the light part
+                        barrier.await(); //await 4
+                        //wait for main thread to take heavy info
+                        //no need to check buckemptflag, heavy won't be added back
+                        //back to the top of while true loop and fetch the new nextnonempty bucket
+                        //when go back to the top of while true loop, will be blocked by the await 1
+                    }
+                }
+            } catch (Coordinator.KilledException e) {
+                System.out.println("Killed");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (BrokenBarrierException e) {
+                e.printStackTrace();
             }
-            // Find next nonempty bucket.
-            int j = i;
-            do {
-                j = (j + 1) % numBuckets;
-            } while (j != i && buckets.get(j).size() == 0);
-            if (i == j) {
-                // Cycled all the way around; we're done
-                break;  // for (;;) loop
-            }
-            i = j;
         }
     }
 
-    // End of Delta stepping.
-    // *************************
+        public Surface(int N, long SD, double G, int D, Coordinator C, int numThreads) {
+            n = N;
+            sd = SD;
+            geom = G;
+            degree = D;
+            coord = C;
+            this.numThreads = numThreads;
 
-    // Constructor
-    //
-    public Surface(int N, long SD, double G, int D, Coordinator C) {
-        n = N;
-        sd = SD;
-        geom = G;
-        degree = D;
-        coord = C;
+            vertices = new Vertex[n];
+            vertexHash = new HashSet<Vertex>(n);
+            edges = new Vector<Edge>();
 
-        vertices = new Vertex[n];
-        vertexHash = new HashSet<Vertex>(n);
-        edges = new Vector<Edge>();
+            prn = new Random();
+            reset();
+        }
 
-        prn = new Random();
-        reset();
-    }
-}
 
-// Class Animation is the one really complicated sub-pane of the user interface.
+        // Class Animation is the one really complicated sub-pane of the user interface.
 //
-class Animation extends JPanel {
-    private static final int width = 512;      // canvas dimensions
-    private static final int height = 512;
-    private static final int dotsize = 6;
-    private static final int border = dotsize;
-    private final Surface s;
+        class Animation extends JPanel {
+            private static final int width = 512;      // canvas dimensions
+            private static final int height = 512;
+            private static final int dotsize = 6;
+            private static final int border = dotsize;
+            private final Surface s;
 
-    // The next two routines figure out where to render the dot
-    // for a vertex, given the size of the animation panel and the spread
-    // of x and y values among all vertices.
-    //
-    private int xPosition(int x) {
-        return (int)
-                (((double) x) * (double) width / (double) s.maxCoord) + border;
-    }
-
-    private int yPosition(int y) {
-        return (int)
-                (((double) s.maxCoord - (double) y) * (double) height
-                        / ((double) s.maxCoord)) + border;
-    }
-
-    // The following method is called automatically by the graphics
-    // system when it thinks the Animation canvas needs to be
-    // re-displayed.  This can happen because code elsewhere in this
-    // program called repaint(), or because of hiding/revealing or
-    // open/close operations in the surrounding window system.
-    //
-    public void paintComponent(final Graphics g) {
-        final Graphics2D g2 = (Graphics2D) g;
-
-        super.paintComponent(g);    // clears panel
-        s.forAllEdges(new Surface.EdgeRoutine() {
-            public void run(int x1, int y1, int x2, int y2, boolean bold, long w) {
-                if (bold) {
-                    g2.setPaint(Color.red);
-                    g2.setStroke(new BasicStroke(3));
-                } else {
-                    g2.setPaint(Color.gray);
-                    g2.setStroke(new BasicStroke(1));
-                }
-                g.drawLine(xPosition(x1), yPosition(y1),
-                        xPosition(x2), yPosition(y2));
+            // The next two routines figure out where to render the dot
+            // for a vertex, given the size of the animation panel and the spread
+            // of x and y values among all vertices.
+            //
+            private int xPosition(int x) {
+                return (int)
+                        (((double) x) * (double) width / (double) s.maxCoord) + border;
             }
-        });
-        s.forAllVertices(new Surface.VertexRoutine() {
-            public void run(int x, int y) {
-                g2.setPaint(Color.blue);
-                g.fillOval(xPosition(x) - dotsize / 2, yPosition(y) - dotsize / 2,
-                        dotsize, dotsize);
+
+            private int yPosition(int y) {
+                return (int)
+                        (((double) s.maxCoord - (double) y) * (double) height
+                                / ((double) s.maxCoord)) + border;
             }
-        });
-        // Distinguish source vertex:
-        s.forSource(new Surface.VertexRoutine() {
-            public void run(int x, int y) {
-                g2.setPaint(Color.green);
-                g.fillOval(xPosition(x) - dotsize, yPosition(y) - dotsize,
-                        dotsize * 2, dotsize * 2);
-                g2.setPaint(Color.black);
-                g2.setStroke(new BasicStroke(2));
-                g.drawOval(xPosition(x) - dotsize, yPosition(y) - dotsize,
-                        dotsize * 2, dotsize * 2);
+
+            // The following method is called automatically by the graphics
+            // system when it thinks the Animation canvas needs to be
+            // re-displayed.  This can happen because code elsewhere in this
+            // program called repaint(), or because of hiding/revealing or
+            // open/close operations in the surrounding window system.
+            //
+            public void paintComponent(final Graphics g) {
+                final Graphics2D g2 = (Graphics2D) g;
+
+                super.paintComponent(g);    // clears panel
+                s.forAllEdges(new Surface.EdgeRoutine() {
+                    public void run(int x1, int y1, int x2, int y2, boolean bold, long w) {
+                        if (bold) {
+                            g2.setPaint(Color.red);
+                            g2.setStroke(new BasicStroke(3));
+                        } else {
+                            g2.setPaint(Color.gray);
+                            g2.setStroke(new BasicStroke(1));
+                        }
+                        g.drawLine(xPosition(x1), yPosition(y1),
+                                xPosition(x2), yPosition(y2));
+                    }
+                });
+                s.forAllVertices(new Surface.VertexRoutine() {
+                    public void run(int x, int y) {
+                        g2.setPaint(Color.blue);
+                        g.fillOval(xPosition(x) - dotsize / 2, yPosition(y) - dotsize / 2,
+                                dotsize, dotsize);
+                    }
+                });
+                // Distinguish source vertex:
+                s.forSource(new Surface.VertexRoutine() {
+                    public void run(int x, int y) {
+                        g2.setPaint(Color.green);
+                        g.fillOval(xPosition(x) - dotsize, yPosition(y) - dotsize,
+                                dotsize * 2, dotsize * 2);
+                        g2.setPaint(Color.black);
+                        g2.setStroke(new BasicStroke(2));
+                        g.drawOval(xPosition(x) - dotsize, yPosition(y) - dotsize,
+                                dotsize * 2, dotsize * 2);
+                    }
+                });
             }
-        });
-    }
 
-    // UI needs to call this routine when vertex locations have changed.
-    //
-    public void reset() {
-        repaint();      // Tell graphics system to re-render.
-    }
+            // UI needs to call this routine when vertex locations have changed.
+            //
+            public void reset() {
+                repaint();      // Tell graphics system to re-render.
+            }
 
-    // Constructor
-    //
-    public Animation(Surface S) {
-        setPreferredSize(new Dimension(width + border * 2, height + border * 2));
-        setBackground(Color.white);
-        setForeground(Color.black);
-        s = S;
-        reset();
-    }
-}
+            // Constructor
+            //
+            public Animation(Surface S) {
+                setPreferredSize(new Dimension(width + border * 2, height + border * 2));
+                setBackground(Color.white);
+                setForeground(Color.black);
+                s = S;
+                reset();
+            }
+        }
 
-// Class UI is the user interface.  It displays a Surface canvas above
+        // Class UI is the user interface.  It displays a Surface canvas above
 // a row of buttons and a row of statistics.  Actions (event handlers)
 // are defined for each of the buttons.  Depending on the state of the
 // UI, either the "run" or the "pause" button is the default (highlighted in
 // most window systems); it will often self-push if you hit carriage return.
 //
-class UI extends JPanel {
-    private final Coordinator coordinator;
-    private final Surface surface;
-    private final Animation animation;
+        class UI extends JPanel {
+            private final Coordinator coordinator;
+            private final Surface surface;
+            private final Animation animation;
 
-    private final JRootPane root;
-    private static final int externalBorder = 6;
+            private final JRootPane root;
+            private static final int externalBorder = 6;
 
-    private static final int stopped = 0;
-    private static final int running = 1;
-    private static final int paused = 2;
-    private static final int done = 3;
+            private static final int stopped = 0;
+            private static final int running = 1;
+            private static final int paused = 2;
+            private static final int done = 3;
 
-    private int state = stopped;
-    private long elapsedTime = 0;
-    private long startTime;
+            private int state = stopped;
+            private long elapsedTime = 0;
+            private long startTime;
 
-    private final JLabel time = new JLabel("time: 0");
+            private final JLabel time = new JLabel("time: 0");
 
-    public void updateTime() {
-        Date d = new Date();
-        elapsedTime += (d.getTime() - startTime);
-        time.setText(String.format("time: %d.%03d", elapsedTime / 1000,
-                elapsedTime % 1000));
-    }
-
-    public void setDone() {
-        root.setDefaultButton(null);
-        updateTime();
-        state = done;
-    }
-
-    ;
-
-    // Constructor
-    //
-    public UI(Coordinator C, Surface S, Animation A,
-              long SD, int NT, RootPaneContainer pane) {
-        final UI ui = this;
-        coordinator = C;
-        surface = S;
-        animation = A;
-
-        final JPanel buttons = new JPanel();   // button panel
-        final JButton runButton = new JButton("Run");
-        final JButton pauseButton = new JButton("Pause");
-        final JButton resetButton = new JButton("Reset");
-        final JButton randomizeButton = new JButton("Randomize");
-        final JButton quitButton = new JButton("Quit");
-
-        final JPanel stats = new JPanel();   // statistics panel
-
-        final JLabel seed = new JLabel("seed: " + SD + "   ");
-
-        runButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                if (state == stopped) {
-                    state = running;
-                    root.setDefaultButton(pauseButton);
-                    Worker w = new Worker(surface, coordinator,
-                            ui, animation, NT == 0);
-                    Date d = new Date();
-                    startTime = d.getTime();
-                    w.start();
-                } else if (state == paused) {
-                    state = running;
-                    root.setDefaultButton(pauseButton);
-                    Date d = new Date();
-                    startTime = d.getTime();
-                    coordinator.toggle();
-                }
+            public void updateTime() {
+                Date d = new Date();
+                elapsedTime += (d.getTime() - startTime);
+                time.setText(String.format("time: %d.%03d", elapsedTime / 1000,
+                        elapsedTime % 1000));
             }
-        });
-        pauseButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                if (state == running) {
-                    updateTime();
-                    state = paused;
-                    root.setDefaultButton(runButton);
-                    coordinator.toggle();
-                }
+
+            public void setDone() {
+                root.setDefaultButton(null);
+                updateTime();
+                state = done;
             }
-        });
-        resetButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                state = stopped;
-                coordinator.stop();
+
+            ;
+
+            // Constructor
+            //
+            public UI(Coordinator C, Surface S, Animation A,
+                      long SD, int NT, RootPaneContainer pane) {
+                final UI ui = this;
+                coordinator = C;
+                surface = S;
+                animation = A;
+
+                final JPanel buttons = new JPanel();   // button panel
+                final JButton runButton = new JButton("Run");
+                final JButton pauseButton = new JButton("Pause");
+                final JButton resetButton = new JButton("Reset");
+                final JButton randomizeButton = new JButton("Randomize");
+                final JButton quitButton = new JButton("Quit");
+
+                final JPanel stats = new JPanel();   // statistics panel
+
+                final JLabel seed = new JLabel("seed: " + SD + "   ");
+
+                runButton.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        if (state == stopped) {
+                            state = running;
+                            root.setDefaultButton(pauseButton);
+                            Worker w = new Worker(surface, coordinator,
+                                    ui, animation, NT == 0);
+                            Date d = new Date();
+                            startTime = d.getTime();
+                            w.start();
+                        } else if (state == paused) {
+                            state = running;
+                            root.setDefaultButton(pauseButton);
+                            Date d = new Date();
+                            startTime = d.getTime();
+                            coordinator.toggle();
+                        }
+                    }
+                });
+                pauseButton.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        if (state == running) {
+                            updateTime();
+                            state = paused;
+                            root.setDefaultButton(runButton);
+                            coordinator.toggle();
+                        }
+                    }
+                });
+                resetButton.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        state = stopped;
+                        coordinator.stop();
+                        root.setDefaultButton(runButton);
+                        surface.reset();
+                        animation.reset();
+                        elapsedTime = 0;
+                        time.setText("time: 0");
+                    }
+                });
+                randomizeButton.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        state = stopped;
+                        coordinator.stop();
+                        root.setDefaultButton(runButton);
+                        long v = surface.randomize();
+                        animation.reset();
+                        seed.setText("seed: " + v + "   ");
+                        elapsedTime = 0;
+                        time.setText("time: 0");
+                    }
+                });
+                quitButton.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        System.exit(0);
+                    }
+                });
+
+                // Put the buttons into the button panel:
+                buttons.setLayout(new FlowLayout());
+                buttons.add(runButton);
+                buttons.add(pauseButton);
+                buttons.add(resetButton);
+                buttons.add(randomizeButton);
+                buttons.add(quitButton);
+
+                // Put the labels into the statistics panel:
+                stats.add(seed);
+                stats.add(time);
+
+                // Put the Surface canvas, the button panel, and the stats
+                // label into the UI:
+                setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+                setBorder(BorderFactory.createEmptyBorder(externalBorder,
+                        externalBorder, externalBorder, externalBorder));
+                add(A);
+                add(buttons);
+                add(stats);
+
+                // Put the UI into the Frame:
+                pane.getContentPane().add(this);
+                root = getRootPane();
                 root.setDefaultButton(runButton);
-                surface.reset();
-                animation.reset();
-                elapsedTime = 0;
-                time.setText("time: 0");
             }
-        });
-        randomizeButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                state = stopped;
-                coordinator.stop();
-                root.setDefaultButton(runButton);
-                long v = surface.randomize();
-                animation.reset();
-                seed.setText("seed: " + v + "   ");
-                elapsedTime = 0;
-                time.setText("time: 0");
-            }
-        });
-        quitButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                System.exit(0);
-            }
-        });
-
-        // Put the buttons into the button panel:
-        buttons.setLayout(new FlowLayout());
-        buttons.add(runButton);
-        buttons.add(pauseButton);
-        buttons.add(resetButton);
-        buttons.add(randomizeButton);
-        buttons.add(quitButton);
-
-        // Put the labels into the statistics panel:
-        stats.add(seed);
-        stats.add(time);
-
-        // Put the Surface canvas, the button panel, and the stats
-        // label into the UI:
-        setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-        setBorder(BorderFactory.createEmptyBorder(externalBorder,
-                externalBorder, externalBorder, externalBorder));
-        add(A);
-        add(buttons);
-        add(stats);
-
-        // Put the UI into the Frame:
-        pane.getContentPane().add(this);
-        root = getRootPane();
-        root.setDefaultButton(runButton);
+        }
     }
-}
