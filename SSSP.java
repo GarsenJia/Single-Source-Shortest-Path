@@ -26,13 +26,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CyclicBarrier;
 
 public class SSSP {
-    private static int n = 50;              // default number of vertices
-    private static double geom = 1.0;       // default degree of geometric reality
+    private static int n = 50; // default number of vertices
+    private static double geom = 1.0; // default degree of geometric reality
     // 0 means random edge weight; 1 means fully geometric distance
-    private static int degree = 5;          // expected number of neighbors per vertex
+    private static int degree = 5; // expected number of neighbors per vertex
     // (near the middle of the graph)
-    private static long sd = 0;             // default random number seed
-    private static int numThreads = 0;      // zero means use Dijkstra's alg;
+    private static long sd = 0; // default random number seed
+    private static int numThreads = 0; // zero means use Dijkstra's alg;
     // positive means use Delta stepping
 
     private static final int TIMING_ONLY = 0;
@@ -41,22 +41,20 @@ public class SSSP {
     private static final int FULL_ANIMATION = 3;
     private static int animate = TIMING_ONLY;// default
 
-
-    private static final String help =
-            "-a [0123] annimation mode:\n"
-                    + "    0 -> timing only\n"
-                    + "    1 -> print events only\n"
-                    + "    2 -> show result\n"
-                    + "    3 -> full animation\n"
-                    + "-n <number of vertices>\n"
-                    + "-d <expected vertex degree>\n"
-                    + "    (for vertices near the middle of large graphs)\n"
-                    + "-g <degree of geometric realism>\n"
-                    + "    (real number between 0 and 1)\n"
-                    + "-s <random number seed>\n"
-                    + "-t <number of threads>\n"
-                    + "    (0 means use Dijkstra's algorithm on one thread)\n"
-                    + "-v  (print this message)\n";
+    private static final String help = "-a [0123] annimation mode:\n"
+            + "    0 -> timing only\n"
+            + "    1 -> print events only\n"
+            + "    2 -> show result\n"
+            + "    3 -> full animation\n"
+            + "-n <number of vertices>\n"
+            + "-d <expected vertex degree>\n"
+            + "    (for vertices near the middle of large graphs)\n"
+            + "-g <degree of geometric realism>\n"
+            + "    (real number between 0 and 1)\n"
+            + "-s <random number seed>\n"
+            + "-t <number of threads>\n"
+            + "    (0 means use Dijkstra's algorithm on one thread)\n"
+            + "-v  (print this message)\n";
 
     // Examine command-line arguments for alternative running modes.
     //
@@ -193,7 +191,7 @@ public class SSSP {
                 public void run(int x1, int y1, int x2, int y2, boolean dum, long w)
                         throws Coordinator.KilledException {
                     c.hesitate();
-                    a.repaint();        // graphics need to be re-rendered
+                    a.repaint(); // graphics need to be re-rendered
                 }
             };
             s.setHooks(er, er);
@@ -257,18 +255,18 @@ class Worker extends Thread {
     private final Coordinator c;
     private final UI u;
     private final Animation a;
-    private final boolean dijkstra;     // Dijkstra = !Delta
+    private final boolean dijkstra; // Dijkstra = !Delta
 
     // The run() method of a Java Thread is never invoked directly by
-    // user code.  Rather, it is called by the Java runtime when user
+    // user code. Rather, it is called by the Java runtime when user
     // code calls start().
     //
     // The run() method of a worker thread *must* begin by calling
-    // c.register() and end by calling c.unregister().  These allow the
+    // c.register() and end by calling c.unregister(). These allow the
     // user interface (via the Coordinator) to pause and terminate
-    // workers.  Note how the worker is set up to catch KilledException.
+    // workers. Note how the worker is set up to catch KilledException.
     // In the process of unwinding back to here we'll cleanly and
-    // automatically release any monitor locks.  If you create new kinds
+    // automatically release any monitor locks. If you create new kinds
     // of workers (as part of a parallel solver), make sure they call
     // c.register() and c.unregister() properly.
     //
@@ -287,7 +285,7 @@ class Worker extends Thread {
         }
         if (a != null) {
             // Tell the graphics event thread to unset the default
-            // button when it gets a chance.  (Threads other than the
+            // button when it gets a chance. (Threads other than the
             // event thread cannot safely modify the GUI directly.)
             a.repaint();
             SwingUtilities.invokeLater(new Runnable() {
@@ -321,17 +319,17 @@ class Surface {
     private final Coordinator coord;
     // Not needed at present, but will need to be passed to any
     // newly created workers.
-    private final int n;  // number of vertices
+    private final int n; // number of vertices
     private final Vertex vertices[];
     // Main array of vertices, used for partitioning and rendering.
     private final HashSet<Vertex> vertexHash;
     // Used to ensure that we never have two vertices directly on top of
-    // each other.  See Vertex.hashCode and Vertex.equals below.
+    // each other. See Vertex.hashCode and Vertex.equals below.
     private final Vector<Edge> edges;
     private long sd = 0;
-    private double geom;        // degree of geometric realism
-    private int degree;         // desired average node degree
-    private final Random prn;   // pseudo-random number generator
+    private double geom; // degree of geometric realism
+    private int degree; // desired average node degree
+    private final Random prn; // pseudo-random number generator
     private final int numThreads;
 
     private class Vertex {
@@ -360,7 +358,7 @@ class Surface {
         }
 
         public boolean equals(Object o) {
-            Vertex v = (Vertex) o;            // run-time type check
+            Vertex v = (Vertex) o; // run-time type check
             return v.xCoord == xCoord && v.yCoord == yCoord;
         }
 
@@ -376,11 +374,11 @@ class Surface {
     }
 
     // In a purely offline SSSP algorithm we probably wouldn't need an
-    // explicit edge class.  Having one makes the graphics a lot more
+    // explicit edge class. Having one makes the graphics a lot more
     // straightforward, though.
     //
     private class Edge {
-        public final Vertex v1;  // vertices are in arbitrary order
+        public final Vertex v1; // vertices are in arbitrary order
         public final Vertex v2;
         public final int weight;
         private boolean selected;
@@ -480,8 +478,8 @@ class Surface {
     }
 
     // 2-dimensional array of buckets into which to put geometrically
-    // proximal vertices.  Sadly, requires suppression of unchecked cast
-    // warnings.  (I could get around that with a an ArrayList of
+    // proximal vertices. Sadly, requires suppression of unchecked cast
+    // warnings. (I could get around that with a an ArrayList of
     // ArrayLists, but that gets really messy...)
     //
     class CheckerBoard {
@@ -507,17 +505,17 @@ class Surface {
     //
     public void reset() {
         // As a heuristic, I want to connect each vertex to about 1/4 of
-        // its geometrically nearby vertices.  So I want to choose
+        // its geometrically nearby vertices. So I want to choose
         // neighbors from a region containing about 4*degree vertices.
         // I divide the plane into a k x k grid, such that a 3x3 subset
         // has about the right number of vertices from which to choose.
         final int k = (int) (Math.sqrt((double) n / (double) degree) * 3 / 2);
-        final int sw = (int) Math.ceil((double) maxCoord / (double) k);     // square width;
+        final int sw = (int) Math.ceil((double) maxCoord / (double) k); // square width;
         CheckerBoard cb = new CheckerBoard(k);
 
         prn.setSeed(sd);
-        vertexHash.clear();     // empty out the set of vertices
-        edges.clear();          // and edges
+        vertexHash.clear(); // empty out the set of vertices
+        edges.clear(); // and edges
         for (int i = 0; i < n; i++) {
             Vertex v;
             int x;
@@ -531,7 +529,7 @@ class Surface {
             vertices[i] = v;
             cb.get(x / sw, y / sw).add(v);
         }
-        vertices[0].distToSource = 0;   // vertex 0 is the source
+        vertices[0].distToSource = 0; // vertex 0 is the source
 
         // create edges
         for (Vertex v : vertices) {
@@ -583,9 +581,9 @@ class Surface {
     // support, because it doesn't export references to its internal tree nodes.
     // The workaround here, due to Jackson Abascal, adds an extra distance field,
     // "weight," which is equal to v.distToSource when v is first inserted in the
-    // PQ, but keeps its value even when v.distToSoure is reduced.  When we want
+    // PQ, but keeps its value even when v.distToSoure is reduced. When we want
     // to reduce a key, we simply insert the vertex again, and leave the old
-    // reference in place.  The old one has a weight that's worse than
+    // reference in place. The old one has a weight that's worse than
     // v.distToSource, allowing us to skip over it.
     //
     class WeightedVertex implements Comparable<WeightedVertex> {
@@ -598,15 +596,16 @@ class Surface {
         }
 
         public int compareTo(WeightedVertex other) {
-            if (weight < other.weight) return -1;
-            if (weight == other.weight) return 0;
+            if (weight < other.weight)
+                return -1;
+            if (weight == other.weight)
+                return 0;
             return 1;
         }
     }
 
     public void DijkstraSolve() throws Coordinator.KilledException {
-        PriorityQueue<WeightedVertex> pq =
-                new PriorityQueue<WeightedVertex>((n * 12) / 10);
+        PriorityQueue<WeightedVertex> pq = new PriorityQueue<WeightedVertex>((n * 12) / 10);
         // Leave some room for extra umremoved entries.
         vertices[0].distToSource = 0;
         // All other vertices still have maximal distToSource, as set by constructor.
@@ -646,39 +645,39 @@ class Surface {
 
     // A Request is a potential relaxation.
     //
-//    class Request {
-//        private Vertex v;
-//        private Edge e;
-//
-//        // To relax a request is to consider whether e might provide
-//        // v with a better path back to the source.
-//        //
-//        public void relax() throws Coordinator.KilledException {
-//            Vertex o = e.other(v);
-//            long altDist = o.distToSource + e.weight;
-//            if (altDist < v.distToSource) {
-//                // Yup; better path home.
-//                buckets.get((int) ((v.distToSource / delta) % numBuckets)).remove(v);
-//                v.distToSource = altDist;
-//                if (v.predecessor != null) {
-//                    v.predecessor.unselect();
-//                }
-//                v.predecessor = e;
-//                e.select();
-//                buckets.get((int) ((altDist / delta) % numBuckets)).add(v);
-//            }
-//        }
-//
-//        public Request(Vertex V, Edge E) {
-//            v = V;
-//            e = E;
-//        }
-//    }
+    // class Request {
+    // private Vertex v;
+    // private Edge e;
+    //
+    // // To relax a request is to consider whether e might provide
+    // // v with a better path back to the source.
+    // //
+    // public void relax() throws Coordinator.KilledException {
+    // Vertex o = e.other(v);
+    // long altDist = o.distToSource + e.weight;
+    // if (altDist < v.distToSource) {
+    // // Yup; better path home.
+    // buckets.get((int) ((v.distToSource / delta) % numBuckets)).remove(v);
+    // v.distToSource = altDist;
+    // if (v.predecessor != null) {
+    // v.predecessor.unselect();
+    // }
+    // v.predecessor = e;
+    // e.select();
+    // buckets.get((int) ((altDist / delta) % numBuckets)).add(v);
+    // }
+    // }
+    //
+    // public Request(Vertex V, Edge E) {
+    // v = V;
+    // e = E;
+    // }
+    // }
 
     public class Message {
-        public Edge e; //which edge
-        public Vertex v; //which vertex
-        public long distToSource; //distance
+        public Edge e; // which edge
+        public Vertex v; // which vertex
+        public long distToSource; // distance
 
         public int bucketDest;
 
@@ -697,6 +696,7 @@ class Surface {
         public ArrayList<ArrayList<LinkedHashSet<Vertex>>> buckets;
         public ArrayList<ConcurrentLinkedQueue<Message>> messages;
         public ArrayList<Long> tentativeDistances;
+        public ArrayList<Long> officialUpdate;
         public int nextBucket = 0;
 
         public static int numThreads;
@@ -708,19 +708,21 @@ class Surface {
             this.buckets = buckets;
             this.messages = messages;
             this.tentativeDistances = tentativeDistances;
+            officialUpdate = new ArrayList<Long>(tentativeDistances.size());
+            officialUpdate.addAll(tentativeDistances);
             this.nextBucket = nextBucket;
         }
 
         public void getNext() {
-//            for (int i = 0; i < numBuckets; i++) {
-//                for (LinkedHashSet<Vertex> bucket : buckets.get(i)) {
-//                    if (bucket.size() > 0) {
-//                        nextBucket = i;
-//                        return;
-//                    }
-//                }
-//            }
-            for (int i = nextBucket; i < numBuckets; i++) {
+            // for (int i = 0; i < numBuckets; i++) {
+            // for (LinkedHashSet<Vertex> bucket : buckets.get(i)) {
+            // if (bucket.size() > 0) {
+            // nextBucket = i;
+            // return;
+            // }
+            // }
+            // }
+            for (int i = 0; i < numBuckets; i++) {
                 for (LinkedHashSet<Vertex> bucket : buckets.get(i)) {
                     if (bucket.size() > 0) {
                         nextBucket = i;
@@ -747,20 +749,23 @@ class Surface {
         try {
             System.out.println("Delta solve main");
             for (int i = 0; i < n; i++) {
+                //Assign id to vertices
                 vertices[i].id = i;
             }
             numBuckets = 2 * degree;
             delta = maxCoord / degree;
             buckets = new ArrayList<ArrayList<LinkedHashSet<Vertex>>>(numBuckets);
+
             for (int i = 0; i < numBuckets; i++) {
                 buckets.add(new ArrayList<LinkedHashSet<Vertex>>(numThreads));
                 for (int j = 0; j < numThreads; j++) {
                     buckets.get(i).add(new LinkedHashSet<Vertex>());
                 }
             }
-            buckets.get(0).get(0).add(vertices[0]);
-            ArrayList<ConcurrentLinkedQueue<Message>> messageQueues =
-                    new ArrayList<ConcurrentLinkedQueue<Message>>(numThreads);
+
+            buckets.get(0).get(0).add(vertices[0]); //Add source to bucket
+            ArrayList<ConcurrentLinkedQueue<Message>> messageQueues = new ArrayList<ConcurrentLinkedQueue<Message>>(
+                    numThreads);
             for (int i = 0; i < numThreads; i++) {
                 messageQueues.add(new ConcurrentLinkedQueue<Message>());
             }
@@ -772,76 +777,103 @@ class Surface {
             Share share = new Share(buckets, messageQueues, tentativeDistances, 0);
             Share.numThreads = numThreads;
             CyclicBarrier barrier = new CyclicBarrier(numThreads + 1);
-//        DeltaWorker[] threads = new DeltaWorker[numThreads];
+            // DeltaWorker[] threads = new DeltaWorker[numThreads];
             altDeltaWorker[] threads = new altDeltaWorker[numThreads];
+            //Initialization ends
+
+
             System.out.println("Starting threads");
             for (int i = 0; i < numThreads; i++) {
-//            threads[i] = new DeltaWorker(i, share, barrier, coord);
+                // threads[i] = new DeltaWorker(i, share, barrier, coord);
                 threads[i] = new altDeltaWorker(i, share, barrier, coord);
                 threads[i].start();
             }
-            System.out.println("main thread outer loop");
+            // System.out.println("main thread outer loop");
             while (true) {
-                System.out.println("main thread getting next bucket");
+                // System.out.println("main thread getting next bucket");
                 share.getNext();
                 if (share.nextBucket == -1) {
                     System.out.println("no more buckets");
-                    System.out.println("wait for threads to finish");
+                    // System.out.println("wait for threads to finish");
                     barrier.await();
                     for (altDeltaWorker thread : threads) {
                         thread.join();
                     }
                     break;
                 }
-                System.out.println("release threads");
+                // System.out.println("checked next buckets release threads");
                 barrier.await();
                 while (true) {
-                    System.out.println("wait for threads to collect modifications");
+                    // System.out.println("wait for threads to collect modifications");
                     barrier.await();
-                    System.out.println("wait for threads to handle messages");
+                    // System.out.println("wait for threads to handle messages");
                     barrier.await();
-                    System.out.println("main thread modify shared data for light");
+                    // System.out.println("main thread modify shared data for light");
                     for (altDeltaWorker thread : threads) {
-                        System.out.println("main thread checking thread " + thread.id);
-                        System.out.println("remove size: " + thread.remove.size());
-                        share.buckets.get(share.nextBucket).get(thread.id).removeAll(thread.remove);
-                        System.out.println("addme size: " + thread.addme.size());
+                        // System.out.println("main thread checking thread " + thread.id);
+                        // System.out.println("remove size: " + thread.remove.size());
+                        // share.buckets.get(share.nextBucket).get(thread.id).removeAll(thread.remove);
+                        // System.out.println("addme size: " + thread.addme.size());
                         for (Message s : thread.addme) {
-                            //System.out.println("adding vertex " + s.v.id);
-                            //int bucketDest = (int) (s.distToSource / delta);
-                            share.buckets.get(s.bucketDest).get(thread.id).add(s.v);
-                            vertices[s.v.id].distToSource = s.distToSource;
-                            share.tentativeDistances.set(s.v.id, s.distToSource);
+                            // System.out.println("adding vertex " + s.v.id);
+                            // int bucketDest = (int) (s.distToSource / delta);
+                            System.out.println();
+                            System.out.println("Thread: "+thread.id+" Bucket Dest: " + s.bucketDest+" ADDING: "+s.v.id);
+                            System.out.println();
+
+                            System.out.println("updating disToSource from: " + vertices[s.v.id].distToSource + " to: "+ s.distToSource + " for vertex: " + s.v.id);
+                            if(vertices[s.v.id].distToSource > s.distToSource){
+                                share.buckets.get(s.bucketDest).get(thread.id).add(s.v);
+                                vertices[s.v.id].distToSource = s.distToSource;
+                                share.tentativeDistances.set(s.v.id, s.distToSource);
+                            }
+
                         }
+                        share.buckets.get(share.nextBucket).get(thread.id).removeAll(thread.remove);
                     }
-                    System.out.println("check if bucket is empty");
+                    // System.out.println("check if bucket is empty");
                     share.checkCurrBucketEmpty();
                     if (share.bucketEmpty) {
                         break;
                     }
+                    // for(int i = 0; i < n; i++){
+                    //     share.officialUpdate.set(i, share.tentativeDistances.get(i));
+                    //     vertices[i].distToSource = share.officialUpdate.get(i);
+                    // }
                     System.out.println("bucket not empty, release threads to work on bucket");
                     barrier.await();
                 }
                 System.out.println("bucket is empty, release threads to relax heavy");
                 barrier.await();
-                System.out.println("wait for threads to finish relaxing heavy");
+                // System.out.println("wait for threads to finish relaxing heavy");
                 barrier.await();
-                System.out.println("wait for threads to handle messages");
+                // System.out.println("wait for threads to handle messages");
                 barrier.await();
-                System.out.println("main thread modify shared data for heavy");
+                // System.out.println("main thread modify shared data for heavy");
                 for (altDeltaWorker thread : threads) {
-                    System.out.println("main thread checking thread " + thread.id);
-                    System.out.println("addme size: " + thread.addme.size());
+                    // System.out.println("main thread checking thread " + thread.id);
+                    // System.out.println("addme size: " + thread.addme.size());
                     for (Message s : thread.addme) {
-                        //System.out.println("adding vertex " + s.v.id);
-                        //int bucketDest = (int) (s.distToSource / delta);
-                        share.buckets.get(s.bucketDest).get(thread.id).add(s.v);
-                        vertices[s.v.id].distToSource = s.distToSource;
-                        share.tentativeDistances.set(s.v.id, s.distToSource);
+                        // System.out.println("adding vertex " + s.v.id);
+                        // int bucketDest = (int) (s.distToSource / delta);
+                        System.out.println();
+                        System.out.println("Thread: " + thread.id + " Bucket Dest: " + s.bucketDest + " ADDING: " + s.v.id);
+                        System.out.println();
+
+                        System.out.println("updating disToSource from: "+vertices[s.v.id].distToSource+" to: "+s.distToSource+ " for vertex: "+s.v.id);
+                        if(vertices[s.v.id].distToSource > s.distToSource){
+                            share.buckets.get(s.bucketDest).get(thread.id).add(s.v);
+                            vertices[s.v.id].distToSource = s.distToSource;
+                            share.tentativeDistances.set(s.v.id, s.distToSource);
+                        }
                     }
 
                 }
-                System.out.println("main thread finished modifying shared data for heavy, realease threads");
+                // for (int i = 0; i < n; i++) {
+                //     share.officialUpdate.set(i, share.tentativeDistances.get(i));
+                //     vertices[i].distToSource = share.officialUpdate.get(i);
+                // }
+                // System.out.println("main thread finished modifying shared data for heavy, realease threads");
                 barrier.await();
             }
         } catch (Exception e) {
@@ -850,126 +882,130 @@ class Surface {
         System.out.println("main thread finished");
     }
 
-//    private class DeltaWorker extends Thread {
-//        private int id;
-//        private final Coordinator coord;
-//        ArrayList<Message> addme = new ArrayList<Message>();
-//        ArrayList<Vertex> remove = new ArrayList<Vertex>();
-//        ArrayList<Message> messageQ = new ArrayList<Message>();
-//        Share share;
-//        CyclicBarrier barrier;
-//        ArrayList<Edge> light = new ArrayList<Edge>();
-//        ArrayList<Edge> heavy = new ArrayList<Edge>();
-//
-//        public DeltaWorker(int id, Share share, CyclicBarrier barrier, Coordinator coord) {
-//            this.id = id;
-//            this.share = share;
-//            this.barrier = barrier;
-//            this.coord = coord;
-//        }
-//
-//
-//        public void run() {
-//            try {
-//                System.out.println("Thread " + id + " registered");
-//                coord.register();
-//                System.out.println("Thread " + id + "outer while true");
-//                while (true) {
-//                    System.out.println("Thread " + id + "released from initial barrier");
-//                    barrier.await(); //await 1
-//                    System.out.println("Thread " + id + " is running");
-//                    if (share.nextBucket == -1) {
-//                        System.out.println("Thread " + id + " is unregistering");
-//                        coord.unregister();
-//                        System.out.println("Thread " + id + " is done");
-//                        return;
-//                    }
-//                    for (Vertex v : share.buckets.get(share.nextBucket).get(id)) {//buck is the first non empty bucket
-//                        //Calculate vertices and separate them into light and heavy
-//                        System.out.println("Thread " + id + " is calculating light and heavy");
-//                        for (Edge e : v.neighbors) {
-//                            if (e.weight <= delta) {
-//                                light.add(e);
-//                            } else {
-//                                heavy.add(e);
-//                            }
-//                        }
-//
-//                        System.out.println("Thread " + id + " relaxing light");
-//                        //Relax light edges
-//                        int assign = -1; //to assign vertices to threads
-//                        for (Edge e : light) {
-//                            Vertex o = e.other(v); //neighbor vertex
-//                            long altDist = v.distToSource + e.weight;
-//                            if (altDist < o.distToSource) {//possible relaxation
-//                                assign = o.id % share.numThreads;
-//                                if (assign == id) {//belongs to this thread
-//                                    Message m = new Message(e, o, altDist);
-//                                    addme.add(m);
-//                                } else {//belongs to another thread
-//                                    Message n = new Message(e, o, altDist);
-//                                    messageQ.add(n);
-//                                }
-//                            }
-//
-//                            remove.add(v);
-//
-//                            System.out.println("Thread " + id + " awaiting main thread for modification");
-//                            barrier.await(); //await 2
-//                            //ready for main thread to take info
-//                            System.out.println("Thread " + id + " is idk");
-//                            barrier.await(); //debug await
-//                            barrier.await(); //await 3
-//                            //main thread await4 can also release this await
-//
-//                            if (!share.bucketEmpty) {//if bucket not empty, continue, from the for loop
-//                                System.out.println("Thread " + id + " will be working on the same bucket");
-//                                continue;           //still in the for loop of the v in partition
-//                            } else {//if bucket is empty, break out of for loop
-//                                System.out.println("Thread " + id + " will be working on a new bucket");
-//                                break; //still in the while true loop
-//                            }
-//                        }//current bucket empty, deal with heavy edges
-//                        //relax heavy edges
-//                        System.out.println("Thread " + id + " is relaxing heavy");
-//                        for (Edge e : heavy) {
-//                            Vertex o = e.other(v); //neighbor vertex
-//                            long altDist = v.distToSource + e.weight;
-//                            if (altDist < o.distToSource) {//possible relaxation
-//                                assign = o.id % share.numThreads;
-//                                if (assign == id) {//belongs to this thread
-//                                    Message m = new Message(e, o, altDist);
-//                                    addme.add(m);
-//                                } else {//belongs to another thread
-//                                    Message n = new Message(e, o, altDist);
-//                                    messageQ.add(n);
-//                                }
-//                            }
-//
-//                        }
-//                        //no need to add to remove, already did in the light part
-//                        System.out.println("Thread " + id + " is awaiting main thread for modification");
-//                        barrier.await(); //await 4
-//                        //wait for main thread to take heavy info
-//                        //no need to check buckemptflag, heavy won't be added back
-//                        //back to the top of while true loop and fetch the new nextnonempty bucket
-//                        //when go back to the top of while true loop, will be blocked by the await 1
-//                    }
-//                }
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            } catch (BrokenBarrierException e) {
-//                e.printStackTrace();
-//            }
-//        }
-//    }
+    // private class DeltaWorker extends Thread {
+    // private int id;
+    // private final Coordinator coord;
+    // ArrayList<Message> addme = new ArrayList<Message>();
+    // ArrayList<Vertex> remove = new ArrayList<Vertex>();
+    // ArrayList<Message> messageQ = new ArrayList<Message>();
+    // Share share;
+    // CyclicBarrier barrier;
+    // ArrayList<Edge> light = new ArrayList<Edge>();
+    // ArrayList<Edge> heavy = new ArrayList<Edge>();
+    //
+    // public DeltaWorker(int id, Share share, CyclicBarrier barrier, Coordinator
+    // coord) {
+    // this.id = id;
+    // this.share = share;
+    // this.barrier = barrier;
+    // this.coord = coord;
+    // }
+    //
+    //
+    // public void run() {
+    // try {
+    // System.out.println("Thread " + id + " registered");
+    // coord.register();
+    // System.out.println("Thread " + id + "outer while true");
+    // while (true) {
+    // System.out.println("Thread " + id + "released from initial barrier");
+    // barrier.await(); //await 1
+    // System.out.println("Thread " + id + " is running");
+    // if (share.nextBucket == -1) {
+    // System.out.println("Thread " + id + " is unregistering");
+    // coord.unregister();
+    // System.out.println("Thread " + id + " is done");
+    // return;
+    // }
+    // for (Vertex v : share.buckets.get(share.nextBucket).get(id)) {//buck is the
+    // first non empty bucket
+    // //Calculate vertices and separate them into light and heavy
+    // System.out.println("Thread " + id + " is calculating light and heavy");
+    // for (Edge e : v.neighbors) {
+    // if (e.weight <= delta) {
+    // light.add(e);
+    // } else {
+    // heavy.add(e);
+    // }
+    // }
+    //
+    // System.out.println("Thread " + id + " relaxing light");
+    // //Relax light edges
+    // int assign = -1; //to assign vertices to threads
+    // for (Edge e : light) {
+    // Vertex o = e.other(v); //neighbor vertex
+    // long altDist = v.distToSource + e.weight;
+    // if (altDist < o.distToSource) {//possible relaxation
+    // assign = o.id % share.numThreads;
+    // if (assign == id) {//belongs to this thread
+    // Message m = new Message(e, o, altDist);
+    // addme.add(m);
+    // } else {//belongs to another thread
+    // Message n = new Message(e, o, altDist);
+    // messageQ.add(n);
+    // }
+    // }
+    //
+    // remove.add(v);
+    //
+    // System.out.println("Thread " + id + " awaiting main thread for
+    // modification");
+    // barrier.await(); //await 2
+    // //ready for main thread to take info
+    // System.out.println("Thread " + id + " is idk");
+    // barrier.await(); //debug await
+    // barrier.await(); //await 3
+    // //main thread await4 can also release this await
+    //
+    // if (!share.bucketEmpty) {//if bucket not empty, continue, from the for loop
+    // System.out.println("Thread " + id + " will be working on the same bucket");
+    // continue; //still in the for loop of the v in partition
+    // } else {//if bucket is empty, break out of for loop
+    // System.out.println("Thread " + id + " will be working on a new bucket");
+    // break; //still in the while true loop
+    // }
+    // }//current bucket empty, deal with heavy edges
+    // //relax heavy edges
+    // System.out.println("Thread " + id + " is relaxing heavy");
+    // for (Edge e : heavy) {
+    // Vertex o = e.other(v); //neighbor vertex
+    // long altDist = v.distToSource + e.weight;
+    // if (altDist < o.distToSource) {//possible relaxation
+    // assign = o.id % share.numThreads;
+    // if (assign == id) {//belongs to this thread
+    // Message m = new Message(e, o, altDist);
+    // addme.add(m);
+    // } else {//belongs to another thread
+    // Message n = new Message(e, o, altDist);
+    // messageQ.add(n);
+    // }
+    // }
+    //
+    // }
+    // //no need to add to remove, already did in the light part
+    // System.out.println("Thread " + id + " is awaiting main thread for
+    // modification");
+    // barrier.await(); //await 4
+    // //wait for main thread to take heavy info
+    // //no need to check buckemptflag, heavy won't be added back
+    // //back to the top of while true loop and fetch the new nextnonempty bucket
+    // //when go back to the top of while true loop, will be blocked by the await 1
+    // }
+    // }
+    // } catch (InterruptedException e) {
+    // e.printStackTrace();
+    // } catch (BrokenBarrierException e) {
+    // e.printStackTrace();
+    // }
+    // }
+    // }
 
     public class altDeltaWorker extends Thread {
         private int id;
         private final Coordinator coord;
         ArrayList<Message> addme = new ArrayList<Message>();
         ArrayList<Vertex> remove = new ArrayList<Vertex>();
-        //ArrayList<Message> messageQ = new ArrayList<Message>();
+        // ArrayList<Message> messageQ = new ArrayList<Message>();
         Share share;
         CyclicBarrier barrier;
         ArrayList<Edge> light = new ArrayList<Edge>();
@@ -982,26 +1018,26 @@ class Surface {
             this.coord = coord;
         }
 
-
         public void run() {
             try {
                 System.out.println("Thread " + id + " registered");
                 coord.register();
-                System.out.println("Thread " + id + "outer while true");
+                // System.out.println("Thread " + id + "outer while true");
                 while (true) {
-                    System.out.println("Thread " + id + " waiting for next bucket");
-                    barrier.await(); //await 1
-                    System.out.println("Thread " + id + " get next bucket, running");
+                    // System.out.println("Thread " + id + " waiting for next bucket");
+                    barrier.await(); // await 1
+                    // System.out.println("Thread " + id + " get next bucket, running");
                     if (share.nextBucket == -1) {
                         System.out.println("Thread " + id + " is unregistering");
                         coord.unregister();
                         System.out.println("Thread " + id + " is done");
                         return;
                     }
-                    while(true){
-                        System.out.println("Thread " + id + " is calculating light and heavy");
-                        for (Vertex v : share.buckets.get(share.nextBucket).get(id)) {//buck is the first non-empty bucket
-                            //Calculate vertices and separate them into light and heavy
+                    while (true) {
+                        // System.out.println("Thread " + id + " is calculating light and heavy");
+                        for (Vertex v : share.buckets.get(share.nextBucket).get(id)) {// buck is the first non-empty
+                            // bucket
+                            // Calculate vertices and separate them into light and heavy
                             heavy.put(v, new ArrayList<Edge>());
                             for (Edge e : v.neighbors) {
                                 if (e.weight <= delta) {
@@ -1010,66 +1046,82 @@ class Surface {
                                     heavy.get(v).add(e);
                                 }
                             }
-
-                            System.out.println("Thread " + id + " relaxing light");
-                            //Relax light edges
-                            int assign = -1; //to assign vertices to threads
+                            System.out.println("&&&");
+                            System.out.println("Thread " + id + " is relaxing light at bucket " + share.nextBucket);
+                            // Relax light edges
+                            int assign = -1; // to assign vertices to threads
                             for (Edge e : light) {
-                                Vertex o = e.other(v); //neighbor vertex
+                                Vertex o = e.other(v); // neighbor vertex
+                                // long altDist = share.tentativeDistances.get(v.id) + e.weight;
                                 long altDist = share.tentativeDistances.get(v.id) + e.weight;
-                                if (altDist < share.tentativeDistances.get(o.id)) {//possible relaxation
+                                System.out.println("///");
+                                System.out.println("Thread "+id+" is relaxing light (" + o.xCoord + ", " + o.yCoord + ") from (" +
+                                        v.xCoord + ", " + v.yCoord
+                                        + ") OVID: "+o.id+" VVID: "+v.id+" with distance "
+                                        + share.tentativeDistances.get(v.id) + " + " + e.weight + " = "+ altDist +" compare to " + o.distToSource);
+                                if (altDist < share.tentativeDistances.get(o.id)) {// possible relaxation
                                     assign = o.id % share.numThreads;
-                                    if (assign == id) {//belongs to this thread
+                                    if (assign == id) {// belongs to this thread
                                         Message m = new Message(e, o, altDist, id);
                                         addme.add(m);
-                                    } else {//belongs to another thread
+                                    } else {// belongs to another thread
                                         Message n = new Message(e, o, altDist, assign);
                                         share.messages.get(assign).add(n);
                                     }
                                 }
                             }
+                            light.clear();
                             remove.add(v);
 
                         }
 
-                        System.out.println("Thread " + id + " finish collecting modification");
+                        // System.out.println("Thread " + id + " finish collecting modification");
                         barrier.await();
-                        System.out.println("Thread " + id + " is handling messages");
-                        while(share.messages.get(id).peek() != null){
+                        //barrier.await();
+                        // System.out.println("Thread " + id + " is handling messages");
+                        while (share.messages.get(id).peek() != null) {
                             Message m = share.messages.get(id).poll();
-                            if(m != null){
+                            if (m != null && (m.distToSource < share.tentativeDistances.get(m.v.id))) {
                                 addme.add(m);
                             }
                         }
-                        System.out.println("Thread " + id + " finish handling message");
+                        // System.out.println("Thread " + id + " finish handling message");
                         barrier.await();
-                        System.out.println("Thread " + id + " is waiting for main thread to modify");
+                        // System.out.println("Thread " + id + " is waiting for main thread to modify");
                         barrier.await();
                         addme.clear();
                         remove.clear();
-                        //messageQ.clear();
+                        // messageQ.clear();
                         light.clear();
-                        if (!share.bucketEmpty) {//if bucket not empty, continue, from the for loop
+                        if (!share.bucketEmpty) {// if bucket not empty, continue, from the for loop
                             System.out.println("Thread " + id + " will be working on the same bucket");
-                            continue;           //still in the for loop of the v in partition
-                        } else {//if bucket is empty, break out of for loop
+                            continue; // still in the for loop of the v in partition
+                        } else {// if bucket is empty, break out of for loop
                             System.out.println("Thread " + id + " will be working on a new bucket");
-                            break; //still in the while true loop
+                            break; // still in the while true loop
                         }
                     }
-                    //relax heavy edges
-                    System.out.println("Thread " + id + " is relaxing heavy");
+                    // relax heavy edges
+                    System.out.println("&&&");
+                    System.out.println("Thread " + id + " is relaxing heavy at bucket " + share.nextBucket);
                     for (Vertex v : heavy.keySet()) {
                         for (Edge e : heavy.get(v)) {
-                            Vertex o = e.other(v); //neighbor vertex
+                            Vertex o = e.other(v); // neighbor vertex
                             long altDist = share.tentativeDistances.get(v.id) + e.weight;
                             int assign = -1;
-                            if (altDist < share.tentativeDistances.get(o.id)) {//possible relaxation
+                            System.out.println("///");
+                            System.out.println(
+                                    "Thread " + id + " is relaxing light (" + o.xCoord + ", " + o.yCoord + ") from (" +
+                                            v.xCoord + ", " + v.yCoord
+                                            + ") OVID: " + o.id + " VVID: " + v.id + " with distance "
+                                            + share.tentativeDistances.get(v.id) + " + " + e.weight + " = " + altDist
+                                            + " compare to " + o.distToSource);
+                            if (altDist < share.tentativeDistances.get(o.id)) {// possible relaxation
                                 assign = o.id % share.numThreads;
-                                if (assign == id) {//belongs to this thread
+                                if (assign == id) {// belongs to this thread
                                     Message m = new Message(e, o, altDist, id);
                                     addme.add(m);
-                                } else {//belongs to another thread
+                                } else {// belongs to another thread
                                     Message n = new Message(e, o, altDist, assign);
                                     share.messages.get(assign).add(n);
                                 }
@@ -1077,25 +1129,25 @@ class Surface {
 
                         }
                     }
-                    System.out.println("Thread " + id + " finished collecting modification");
+                    //System.out.println("Thread " + id + " finished collecting modification");
                     barrier.await();
-                    System.out.println("Thread " + id + " is handling messages");
-                    while(share.messages.get(id).peek() != null){
+                    //System.out.println("Thread " + id + " is handling messages");
+                    while (share.messages.get(id).peek() != null) {
                         Message m = share.messages.get(id).poll();
-                        if(m != null){
+                        if (m != null && (m.distToSource < share.tentativeDistances.get(m.v.id))) {
                             addme.add(m);
                         }
                     }
-                    System.out.println("Thread " + id + " finish handling message");
+                    //System.out.println("Thread " + id + " finish handling message");
                     barrier.await();
-                    System.out.println("Thread " + id + " is waiting for main thread to modify");
+                    //System.out.println("Thread " + id + " is waiting for main thread to modify");
                     barrier.await();
                     addme.clear();
                     remove.clear();
-                    //messageQ.clear();
+                    // messageQ.clear();
                     light.clear();
                     heavy.clear();
-                    System.out.println("Thread " + id + " is done with this bucket");
+                    System.out.println("Thread " + id + " is done with this bucket: "+ share.nextBucket);
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -1135,7 +1187,7 @@ class Surface {
 // Class Animation is the one really complicated sub-pane of the user interface.
 //
 class Animation extends JPanel {
-    private static final int width = 512;      // canvas dimensions
+    private static final int width = 512; // canvas dimensions
     private static final int height = 512;
     private static final int dotsize = 6;
     private static final int border = dotsize;
@@ -1146,26 +1198,24 @@ class Animation extends JPanel {
     // of x and y values among all vertices.
     //
     private int xPosition(int x) {
-        return (int)
-                (((double) x) * (double) width / (double) s.maxCoord) + border;
+        return (int) (((double) x) * (double) width / (double) s.maxCoord) + border;
     }
 
     private int yPosition(int y) {
-        return (int)
-                (((double) s.maxCoord - (double) y) * (double) height
-                        / ((double) s.maxCoord)) + border;
+        return (int) (((double) s.maxCoord - (double) y) * (double) height
+                / ((double) s.maxCoord)) + border;
     }
 
     // The following method is called automatically by the graphics
     // system when it thinks the Animation canvas needs to be
-    // re-displayed.  This can happen because code elsewhere in this
+    // re-displayed. This can happen because code elsewhere in this
     // program called repaint(), or because of hiding/revealing or
     // open/close operations in the surrounding window system.
     //
     public void paintComponent(final Graphics g) {
         final Graphics2D g2 = (Graphics2D) g;
 
-        super.paintComponent(g);    // clears panel
+        super.paintComponent(g); // clears panel
         s.forAllEdges(new Surface.EdgeRoutine() {
             public void run(int x1, int y1, int x2, int y2, boolean bold, long w) {
                 if (bold) {
@@ -1203,7 +1253,7 @@ class Animation extends JPanel {
     // UI needs to call this routine when vertex locations have changed.
     //
     public void reset() {
-        repaint();      // Tell graphics system to re-render.
+        repaint(); // Tell graphics system to re-render.
     }
 
     // Constructor
@@ -1217,9 +1267,9 @@ class Animation extends JPanel {
     }
 }
 
-// Class UI is the user interface.  It displays a Surface canvas above
-// a row of buttons and a row of statistics.  Actions (event handlers)
-// are defined for each of the buttons.  Depending on the state of the
+// Class UI is the user interface. It displays a Surface canvas above
+// a row of buttons and a row of statistics. Actions (event handlers)
+// are defined for each of the buttons. Depending on the state of the
 // UI, either the "run" or the "pause" button is the default (highlighted in
 // most window systems); it will often self-push if you hit carriage return.
 //
@@ -1266,14 +1316,14 @@ class UI extends JPanel {
         surface = S;
         animation = A;
 
-        final JPanel buttons = new JPanel();   // button panel
+        final JPanel buttons = new JPanel(); // button panel
         final JButton runButton = new JButton("Run");
         final JButton pauseButton = new JButton("Pause");
         final JButton resetButton = new JButton("Reset");
         final JButton randomizeButton = new JButton("Randomize");
         final JButton quitButton = new JButton("Quit");
 
-        final JPanel stats = new JPanel();   // statistics panel
+        final JPanel stats = new JPanel(); // statistics panel
 
         final JLabel seed = new JLabel("seed: " + SD + "   ");
 
@@ -1362,4 +1412,3 @@ class UI extends JPanel {
         root.setDefaultButton(runButton);
     }
 }
-
