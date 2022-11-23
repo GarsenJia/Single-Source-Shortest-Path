@@ -826,6 +826,12 @@ class Surface {
                                 share.buckets.get(s.bucketDest).get(thread.id).add(s.v);
                                 vertices[s.v.id].distToSource = s.distToSource;
                                 share.tentativeDistances.set(s.v.id, s.distToSource);
+                                Vertex v = s.v;
+                                if (v.predecessor != null) {
+                                    v.predecessor.unselect();
+                                }
+                                v.predecessor = s.e;
+                                s.e.select();
                             }
 
                         }
@@ -865,6 +871,12 @@ class Surface {
                             share.buckets.get(s.bucketDest).get(thread.id).add(s.v);
                             vertices[s.v.id].distToSource = s.distToSource;
                             share.tentativeDistances.set(s.v.id, s.distToSource);
+                            Vertex v = s.v;
+                            if (v.predecessor != null) {
+                                v.predecessor.unselect();
+                            }
+                            v.predecessor = s.e;
+                            s.e.select();
                         }
                     }
 
@@ -877,6 +889,8 @@ class Surface {
                 barrier.await();
             }
         } catch (Exception e) {
+            e.printStackTrace();
+        } catch (Throwable e) {
             e.printStackTrace();
         }
         // System.out.println("main thread finished");
